@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイマー</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .container {
+    text-align: center;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 2rem;
+    color: #888;
+  }
+  .display {
+    font-size: 6rem;
+    font-weight: 200;
+    letter-spacing: 0.05em;
+    margin-bottom: 2rem;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s;
+  }
+  .display.alert {
+    color: #e74c3c;
+    animation: pulse 0.5s infinite alternate;
+  }
+  @keyframes pulse {
+    from { opacity: 1; }
+    to { opacity: 0.4; }
+  }
+  .inputs {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .input-group label {
+    font-size: 0.75rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .input-group input {
+    width: 5rem;
+    padding: 0.6rem;
+    font-size: 1.5rem;
+    text-align: center;
+    background: #16213e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #eee;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input:focus {
+    border-color: #3498db;
+  }
+  .buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+  button {
+    padding: 0.8rem 2rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    font-weight: 500;
+  }
+  button:active { transform: scale(0.95); }
+  button:disabled { opacity: 0.3; cursor: default; }
+  .btn-start { background: #2ecc71; color: #fff; }
+  .btn-pause { background: #f39c12; color: #fff; }
+  .btn-reset { background: #555; color: #fff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>TIMER</h1>
+  <div class="display" id="display">00:00</div>
+  <div class="inputs" id="inputs">
+    <div class="input-group">
+      <label>分</label>
+      <input type="number" id="minInput" min="0" max="99" value="5">
+    </div>
+    <div class="input-group">
+      <label>秒</label>
+      <input type="number" id="secInput" min="0" max="59" value="0">
+    </div>
+  </div>
+  <div class="buttons">
+    <button class="btn-start" id="startBtn">スタート</button>
+    <button class="btn-pause" id="pauseBtn" disabled>一時停止</button>
+    <button class="btn-reset" id="resetBtn" disabled>リセット</button>
+  </div>
+</div>
+
+<script>
+  const display = document.getElementById('display');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const minInput = document.getElementById('minInput');
+  const secInput = document.getElementById('secInput');
+  const inputs = document.getElementById('inputs');
+
+  let remaining = 0;
+  let intervalId = null;
+  let running = false;
+  let audioCtx = null;
+
+  function fmt(n) { return String(n).padStart(2, '0'); }
+
+  function render() {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    display.textContent = fmt(m) + ':' + fmt(s);
+  }
+
+  function playAlarm() {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const beep = (freq, start, dur) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + start + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + start);
+      osc.stop(audioCtx.currentTime + start + dur);
+    };
+    for (let i = 0; i < 4; i++) beep(880, i * 0.25, 0.15);
+  }
+
+  function tick() {
+    if (remaining <= 0) {
+      clearInterval(intervalId);
+      intervalId = null;
+      running = false;
+      display.classList.add('alert');
+      playAlarm();
+      startBtn.disabled = true;
+      pauseBtn.disabled = true;
+      return;
+    }
+    remaining--;
+    render();
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (!running) {
+      if (remaining === 0) {
+        const m = Math.max(0, parseInt(minInput.value) || 0);
+        const s = Math.max(0, Math.min(59, parseInt(secInput.value) || 0));
+        remaining = m * 60 + s;
+        if (remaining === 0) return;
+      }
+      running = true;
+      inputs.style.display = 'none';
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resetBtn.disabled = false;
+      render();
+      intervalId = setInterval(tick, 1000);
+    }
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (running) {
+      clearInterval(intervalId);
+      intervalId = null;
+      running = false;
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    clearInterval(intervalId);
+    intervalId = null;
+    running = false;
+    remaining = 0;
+    display.classList.remove('alert');
+    display.textContent = '00:00';
+    inputs.style.display = 'flex';
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    resetBtn.disabled = true;
+  });
+</script>
+</body>
+</html>
